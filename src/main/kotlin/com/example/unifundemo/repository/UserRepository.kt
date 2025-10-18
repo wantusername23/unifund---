@@ -1,4 +1,4 @@
-package com.example.uninfundemo.repository
+package com.example.unifundemo.repository
 
 import com.example.unifundemo.domain.user.User
 import org.springframework.data.jpa.repository.JpaRepository

@@ -5,7 +5,7 @@ import com.example.unifundemo.domain.user.User
 import com.example.unifundemo.dto.user.LoginRequest
 import com.example.unifundemo.dto.user.SignUpRequest
 
-import com.example.uninfundemo.repository.UserRepository
+import com.example.unifundemo.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

@@ -7,10 +7,15 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.http.HttpMethod
+import org.springframework.security.config.http.SessionCreationPolicy // 💡 이 import 확인
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter // 💡 이 import 확인
 
 @Configuration
 @EnableWebSecurity
-class SecurityConfig {
+class SecurityConfig(
+    private val jwtAuthenticationFilter: JwtAuthenticationFilter
+) {
 
     // 비밀번호를 암호화하는 방법을 Spring에게 알려줌
     @Bean
@@ -18,17 +23,20 @@ class SecurityConfig {
         return BCryptPasswordEncoder()
     }
 
+
     // HTTP 요청에 대한 보안 설정을 구성
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http
-            .csrf { it.disable() } // CSRF 보호 비활성화 (API 서버에서는 보통 비활성화)
+            .csrf { it.disable() }
+            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
-                // 이 주소들로 오는 요청은 인증 없이 허용
                 it.requestMatchers("/api/users/signup", "/api/users/login").permitAll()
-                    // 그 외 모든 요청은 인증이 필요함
+                    .requestMatchers(HttpMethod.GET, "/api/worldviews", "/api/worldviews/**").permitAll() // 💡 이 규칙에 GET /memberships가 포함됨
                     .anyRequest().authenticated()
             }
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
+
         return http.build()
     }
 }

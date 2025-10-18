@@ -1,4 +1,4 @@
-package org.example.unifundemo
+package com.example.unifundemo
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
@@ -7,5 +7,5 @@ import org.springframework.boot.runApplication
 class UnifundemoApplication
 
 fun main(args: Array<String>) {
-    runApplication<UnifundemoApplication>(*args)
+    runApplication<com.example.unifundemo.UnifundemoApplication>(*args)
 }
