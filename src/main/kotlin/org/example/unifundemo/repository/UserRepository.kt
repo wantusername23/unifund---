@@ -1,6 +1,6 @@
-package com.example.unifundemo.repository
+package org.example.unifundemo.repository
 
-import com.example.unifundemo.domain.user.User
+import org.example.unifundemo.domain.user.User
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface UserRepository : JpaRepository<User, Long> {

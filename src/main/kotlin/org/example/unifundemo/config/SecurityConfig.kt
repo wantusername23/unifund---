@@ -1,4 +1,4 @@
-package com.example.unifundemo.config
+package org.example.unifundemo.config
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

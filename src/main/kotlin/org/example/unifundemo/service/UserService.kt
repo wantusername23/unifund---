@@ -1,11 +1,11 @@
-package com.example.unifundemo.service
+package org.example.unifundemo.service
 
-import com.example.unifundemo.config.JwtTokenProvider
-import com.example.unifundemo.domain.user.User
-import com.example.unifundemo.dto.user.LoginRequest
-import com.example.unifundemo.dto.user.SignUpRequest
+import org.example.unifundemo.config.JwtTokenProvider
+import org.example.unifundemo.domain.user.User
+import org.example.unifundemo.dto.user.LoginRequest
+import org.example.unifundemo.dto.user.SignUpRequest
 
-import com.example.unifundemo.repository.UserRepository
+import org.example.unifundemo.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional
 class UserService(
     private val userRepository: UserRepository,
     private val passwordEncoder: PasswordEncoder,
-    private val jwtTokenProvider: JwtTokenProvider // JwtTokenProvider 주입
+    private val jwtTokenProvider: org.example.unifundemo.config.JwtTokenProvider // JwtTokenProvider 주입
 ) {
 
     fun signUp(request: SignUpRequest): User {

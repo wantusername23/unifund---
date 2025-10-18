@@ -1,4 +1,4 @@
-package com.example.unifundemo.config
+package org.example.unifundemo.config
 
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts

@@ -1,8 +1,8 @@
-package com.example.unifundemo.controller
+package org.example.unifundemo.controller
 
-import com.example.unifundemo.dto.user.SignUpRequest
-import com.example.unifundemo.dto.user.LoginRequest
-import com.example.unifundemo.service.UserService
+import org.example.unifundemo.dto.user.SignUpRequest
+import org.example.unifundemo.dto.user.LoginRequest
+import org.example.unifundemo.service.UserService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
