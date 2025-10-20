@@ -13,6 +13,8 @@ import org. example. unifundemo. domain. report. ReportStatus
 import org. example. unifundemo. domain. post. Post
 import org. example. unifundemo. domain. post. BoardType
 import org. example. unifundemo. domain. post. PostStatus
+import org.springframework.security.access.AccessDeniedException
+
 
 @Service
 @Transactional
@@ -29,9 +31,22 @@ class AdminService(
 
         val report = if (request.postId != null) { // 게시글 신고
             val post = postRepository.findById(request.postId).orElseThrow { EntityNotFoundException("게시글을 찾을 수 없습니다.") }
-            PlagiarismReport(reporter, PlagiarismReportType.POST, worldview, post, request.reason)
+            // ✅ named arguments를 사용하여 오류 수정
+            PlagiarismReport(
+                reporter = reporter,
+                reportType = PlagiarismReportType.POST,
+                worldview = worldview,
+                post = post,
+                reason = request.reason
+            )
         } else { // 세계관 신고
-            PlagiarismReport(reporter, PlagiarismReportType.WORLDVIEW, worldview, null, request.reason)
+            // ✅ named arguments를 사용하여 오류 수정
+            PlagiarismReport(
+                reporter = reporter,
+                reportType = PlagiarismReportType.WORLDVIEW,
+                worldview = worldview,
+                reason = request.reason
+            )
         }
         reportRepository.save(report)
     }

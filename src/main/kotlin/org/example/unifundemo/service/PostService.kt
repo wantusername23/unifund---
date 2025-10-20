@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional
 import org.example.unifundemo.domain.post.PostStatus
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import org.example.unifundemo.domain.worldview.Permission
+import org.example.unifundemo.repository.ContributorRepository
+
 
 @Service
 @Transactional
@@ -22,7 +25,8 @@ class PostService(
     private val userRepository: UserRepository,
     private val worldviewRepository: WorldViewRepository,
     private val userMembershipRepository: UserMembershipRepository,
-    private val postRecommendationRepository: PostRecommendationRepository
+    private val postRecommendationRepository: PostRecommendationRepository,
+    private val contributorRepository: ContributorRepository
 ) {
     // 자유게시판 글 작성
     fun createFreeBoardPost(worldviewId: Long, userEmail: String, request: CreatePostRequest): PostResponse {
@@ -55,14 +59,17 @@ class PostService(
         val worldview = worldviewRepository.findById(worldviewId).orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
 
         // 🛡️ 권한 검사: 레벨 2 이상 멤버십 가입자인지 확인
-        val subscription = userMembershipRepository.findByUserAndMembershipWorldview(user, worldview)
-            ?: throw AccessDeniedException("작품 게시판은 특정 등급 이상의 멤버십 가입자만 작성할 수 있습니다.")
+        val isContributorWithEditPermission = contributorRepository.findByWorldViewIdAndUserId(worldview.id!!, user.id!!)
+            ?.let { it.permission == Permission.EDITOR } ?: false
 
-        if (subscription.membership.level < 2) {
-            throw AccessDeniedException("작품 게시판에 글을 작성할 수 있는 멤버십 등급이 아닙니다.")
+        val subscription = userMembershipRepository.findByUserAndMembershipWorldview(user, worldview)
+
+        if (subscription == null && !isContributorWithEditPermission) {
+            throw AccessDeniedException("작품 게시판은 특정 등급 이상의 멤버십 가입자 또는 편집 권한이 있는 공동 창작자만 작성할 수 있습니다.")
         }
-        if (request.isNotice == true && worldview.creator.email != userEmail) {
-            throw AccessDeniedException("공지는 세계관 창작자만 작성할 수 있습니다.")
+
+        if (subscription != null && subscription.membership.level < 2 && !isContributorWithEditPermission) {
+            throw AccessDeniedException("작품 게시판에 글을 작성할 수 있는 멤버십 등급이 아닙니다.")
         }
 
         val post = Post(

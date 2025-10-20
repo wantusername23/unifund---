@@ -13,6 +13,8 @@ import org.example.unifundemo.dto.membership.MembershipResponse
 import org.springframework.web.bind.annotation.*
 import org.springframework.http.MediaType
 import org.springframework.web.multipart.MultipartFile
+import org.example.unifundemo.dto.worldview.ContributorRequest
+import org.example.unifundemo.dto.worldview.ContributorResponse
 
 @RestController
 @RequestMapping("/api/worldviews")
@@ -86,5 +88,20 @@ class WorldviewController(
     fun searchWorldviews(@RequestParam q: String, principal: Principal?): ResponseEntity<List<WorldviewSimpleResponse>> {
         val worldviews = worldviewService.searchWorldviews(q, principal?.name)
         return ResponseEntity.ok(worldviews)
+    }
+    @PostMapping("/{worldviewId}/contributors")
+    fun addContributor(
+        @PathVariable worldviewId: Long,
+        principal: Principal,
+        @RequestBody request: ContributorRequest
+    ): ResponseEntity<ContributorResponse> {
+        val contributor = worldviewService.addContributor(worldviewId, principal.name, request)
+        return ResponseEntity.status(HttpStatus.CREATED).body(contributor)
+    }
+
+    @GetMapping("/{worldviewId}/contributors")
+    fun getContributors(@PathVariable worldviewId: Long): ResponseEntity<List<ContributorResponse>> {
+        val contributors = worldviewService.getContributors(worldviewId)
+        return ResponseEntity.ok(contributors)
     }
 }

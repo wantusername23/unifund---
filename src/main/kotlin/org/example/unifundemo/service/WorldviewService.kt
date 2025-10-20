@@ -29,6 +29,11 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import org.example.unifundemo.repository.PostRepository
 import org.example.unifundemo.domain.post.PostStatus
+import org.example.unifundemo.domain.worldview.Contributor
+import org.example.unifundemo.domain.worldview.Permission
+import org.example.unifundemo.dto.worldview.ContributorRequest
+import org.example.unifundemo.dto.worldview.ContributorResponse
+import org.example.unifundemo.repository.ContributorRepository
 
 
 @Service
@@ -41,7 +46,8 @@ class WorldviewService(
     @Value("\${file.upload-dir}") private val uploadDir: String,
     private val distributionHistoryRepository: DistributionHistoryRepository, // ✅ 추가
     private val revenueShareRepository: RevenueShareRepository,
-    private val postRepository: PostRepository
+    private val postRepository: PostRepository,
+    private val contributorRepository: ContributorRepository
 ) {
     fun createWorldview(email: String, request: CreateWorldviewRequest, file: MultipartFile): WorldView {
         val worldview = createAndSaveWorldview(email, request, file)
@@ -174,7 +180,8 @@ class WorldviewService(
     @Transactional(readOnly = true)
     fun searchWorldviews(query: String, userEmail: String?): List<WorldviewSimpleResponse> {
         // 1. 세계관의 제목, 키워드, 설명에서 직접 검색
-        val directResults = worldviewRepository.findByNameContainingIgnoreCaseOrKeywordsContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query, query)
+        // ✅ 수정된 Repository 메서드 호출
+        val directResults = worldviewRepository.searchWorldviews(query)
 
         // 2. 인기 게시글의 제목, 내용에서 검색하여 관련 세계관 찾기
         val popularPosts = postRepository.findPopularPostsContainingQuery(query)
@@ -276,5 +283,35 @@ class WorldviewService(
             throw AccessDeniedException("분배 내역을 조회할 권한이 없습니다.")
         }
         return distributionHistoryRepository.findByWorldviewIdOrderByIdDesc(worldviewId)
+    }
+    // 공동 창작자 초대
+    fun addContributor(worldviewId: Long, userEmail: String, request: ContributorRequest): ContributorResponse {
+        val worldview = worldviewRepository.findById(worldviewId)
+            .orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
+
+        if (worldview.creator.email != userEmail) {
+            throw AccessDeniedException("세계관 소유자만 공동 창작자를 초대할 수 있습니다.")
+        }
+
+        val contributorUser = userRepository.findByEmail(request.userEmail)
+            ?: throw EntityNotFoundException("초대할 사용자를 찾을 수 없습니다.")
+
+        if (contributorRepository.findByWorldViewIdAndUserId(worldviewId, contributorUser.id!!) != null) {
+            throw IllegalStateException("이미 추가된 공동 창작자입니다.")
+        }
+
+        val contributor = Contributor(
+            user = contributorUser,
+            worldView = worldview,
+            permission = request.permission
+        )
+
+        return ContributorResponse.from(contributorRepository.save(contributor))
+    }
+
+    // 공동 창작자 목록 조회
+    @Transactional(readOnly = true)
+    fun getContributors(worldviewId: Long): List<ContributorResponse> {
+        return contributorRepository.findByWorldViewId(worldviewId).map { ContributorResponse.from(it) }
     }
 }
