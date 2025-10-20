@@ -1,5 +1,7 @@
 package org.example.unifundemo.service
 
+import org.example.unifundemo.domain.notification.Notification
+import org.example.unifundemo.domain.user.User
 import org.example.unifundemo.dto.notification.NotificationResponse
 import org.example.unifundemo.repository.NotificationRepository
 import org.example.unifundemo.repository.UserRepository
@@ -12,8 +14,25 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional
 class NotificationService(
     private val notificationRepository: NotificationRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val sseEmitterService: SseEmitterService
 ) {
+    // ✅ 알림 생성 및 실시간 발송 메서드 추가
+    fun sendNotification(user: User, message: String) {
+        // 1. 알림 객체 생성 및 DB에 저장
+        val notification = Notification(
+            user = user,
+            message = message
+        )
+        val savedNotification = notificationRepository.save(notification)
+
+        // 2. DTO로 변환
+        val notificationResponse = NotificationResponse.from(savedNotification)
+
+        // 3. SSE Emitter를 통해 실시간 발송
+        sseEmitterService.send(user.email, notificationResponse)
+    }
+
     @Transactional(readOnly = true)
     fun getMyNotifications(userEmail: String): List<NotificationResponse> {
         val user = userRepository.findByEmail(userEmail) ?: throw EntityNotFoundException("사용자를 찾을 수 없습니다.")

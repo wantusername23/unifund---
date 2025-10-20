@@ -8,16 +8,18 @@ data class WorldviewSimpleResponse(
     val name: String,
     val coverImageUrl: String,
     val creatorNickname: String,
-    val isCreator: Boolean
+    val isCreator: Boolean,
+    val tags: Set<String>
 ) {
     companion object {
-        fun from(worldview: WorldView, isCreator: Boolean): WorldviewSimpleResponse {
+        fun from(worldview: WorldView, isCreator: Boolean, tags: Set<String>): WorldviewSimpleResponse {
             return WorldviewSimpleResponse(
                 id = worldview.id!!,
                 name = worldview.name,
                 coverImageUrl = worldview.coverImageUrl,
                 creatorNickname = worldview.creator.nickname,
-                isCreator = isCreator
+                isCreator = isCreator,
+                tags = tags
             )
         }
     }
@@ -31,10 +33,11 @@ data class WorldviewDetailResponse(
     val keywords: String,
     val coverImageUrl: String,
     val creatorNickname: String,
-    val isCreator: Boolean
+    val isCreator: Boolean,
+    val tags: Set<String>
 ) {
     companion object {
-        fun from(worldview:WorldView, isCreator: Boolean): WorldviewDetailResponse {
+        fun from(worldview:WorldView, isCreator: Boolean, tags: Set<String>): WorldviewDetailResponse {
             return WorldviewDetailResponse(
                 id = worldview.id!!,
                 name = worldview.name,
@@ -42,7 +45,8 @@ data class WorldviewDetailResponse(
                 keywords = worldview.keywords,
                 coverImageUrl = worldview.coverImageUrl,
                 creatorNickname = worldview.creator.nickname,
-                isCreator = isCreator
+                isCreator = isCreator,
+                tags = tags
             )
         }
     }

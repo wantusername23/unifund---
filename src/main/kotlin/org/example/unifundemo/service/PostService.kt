@@ -16,6 +16,9 @@ import java.math.BigDecimal
 import java.time.LocalDateTime
 import org.example.unifundemo.domain.worldview.Permission
 import org.example.unifundemo.repository.ContributorRepository
+import org.example.unifundemo.domain.tag.PostTag
+import org.example.unifundemo.repository.PostTagRepository
+import org.example.unifundemo.repository.TagRepository
 
 
 @Service
@@ -26,8 +29,30 @@ class PostService(
     private val worldviewRepository: WorldViewRepository,
     private val userMembershipRepository: UserMembershipRepository,
     private val postRecommendationRepository: PostRecommendationRepository,
-    private val contributorRepository: ContributorRepository
+    private val contributorRepository: ContributorRepository,
+    private val tagService: TagService,
+    private val tagRepository: TagRepository,
+    private val postTagRepository: PostTagRepository,
+    private val notificationService: NotificationService
 ) {
+    // ✅ 게시글 태그 처리 로직 (내부 헬퍼)
+    private fun processPostTags(post: Post, tagNames: Set<String>) {
+        if (tagNames.isEmpty()) return
+
+        val tags = tagService.findOrCreateTags(tagNames)
+        val postTags = tags.map { tag ->
+            PostTag(post = post, tag = tag)
+        }
+        postTagRepository.saveAll(postTags)
+    }
+
+    // ✅ 게시글 ID로 태그 이름 Set을 조회하는 로직 (내부 헬퍼)
+
+    private fun getTagsForPost(postId: Long): Set<String> {
+        return postTagRepository.findByPostId(postId)
+            .map { it.tag.name }
+            .toSet()
+    }
     // 자유게시판 글 작성
     fun createFreeBoardPost(worldviewId: Long, userEmail: String, request: CreatePostRequest): PostResponse {
         val user = userRepository.findByEmail(userEmail) ?: throw EntityNotFoundException("사용자를 찾을 수 없습니다.")
@@ -51,7 +76,8 @@ class PostService(
         )
 
         val savedPost = postRepository.save(post)
-        return PostResponse.from(savedPost)
+        processPostTags(savedPost, request.tags)
+        return PostResponse.from(savedPost, request.tags)
     }
     fun createWorksBoardPost(worldviewId: Long, userEmail: String, request: CreatePostRequest): PostResponse {
         // ... 권한 검사 로직은 동일 ...
@@ -81,7 +107,8 @@ class PostService(
             // status는 기본값인 PENDING으로 자동 설정됨
         )
         val savedPost = postRepository.save(post)
-        return PostResponse.from(savedPost)
+        processPostTags(savedPost, request.tags)
+        return PostResponse.from(savedPost, request.tags)
     }
 
     // 창작자의 게시글 승인 (새 메소드)
@@ -96,7 +123,8 @@ class PostService(
         post.status = PostStatus.APPROVED
         post.updatedAt = LocalDateTime.now()
         val savedPost = postRepository.save(post)
-        return PostResponse.from(savedPost)
+        val tags = getTagsForPost(savedPost.id!!)
+        return PostResponse.from(savedPost, tags)
     }
 
     // 게시판 글 목록 조회
@@ -104,7 +132,8 @@ class PostService(
     fun getPosts(worldviewId: Long, boardType: BoardType): List<PostResponse> {
         // ✅ 수정된 메소드 호출
         return postRepository.findByWorldviewIdAndBoardTypeOrderByIsNoticeDescCreatedAtDesc(worldviewId, boardType)
-            .map { post -> PostResponse.from(post) }
+            .map { post -> val tags = getTagsForPost(post.id!!)
+                PostResponse.from(post, tags) }
     }
     fun recommendPost(postId: Long, userEmail: String) {
         val user = userRepository.findByEmail(userEmail) ?: throw EntityNotFoundException("사용자를 찾을 수 없습니다.")
@@ -127,6 +156,11 @@ class PostService(
         // 게시글의 추천수 업데이트
         post.recommendations++
         postRepository.save(post)
+
+        if (post.author.id != user.id) {
+            val message = "${user.nickname}님이 '${post.title}' 게시글을 추천했습니다."
+            notificationService.sendNotification(post.author, message)
+        }
     }
     @Transactional(readOnly = true)
     fun getPopularPosts(): List<PostResponse> {
@@ -134,7 +168,11 @@ class PostService(
             recommendations = 20,
             status = PostStatus.APPROVED
         )
-        return popularPosts.map { PostResponse.from(it) }
+        return popularPosts.map { post ->
+            // ✅ 태그 조회 로직 추가
+            val tags = getTagsForPost(post.id!!)
+            PostResponse.from(post, tags) // ✅ DTO에 tags 전달
+        }
     }
     fun getPostDetails(postId: Long): PostResponse {
         val post = postRepository.findById(postId).orElseThrow { EntityNotFoundException("게시글을 찾을 수 없습니다.") }
@@ -146,7 +184,8 @@ class PostService(
         val revenuePerView = BigDecimal("3")
         post.worldview.revenuePool = post.worldview.revenuePool.add(revenuePerView)
 
-        return PostResponse.from(postRepository.save(post))
+        val tags = getTagsForPost(post.id!!)
+        return PostResponse.from(postRepository.save(post), tags)
     }
     @Transactional(readOnly = true)
     fun getPendingPosts(worldviewId: Long, userEmail: String): List<PostResponse> {
@@ -159,6 +198,19 @@ class PostService(
         }
 
         return postRepository.findByWorldviewIdAndStatus(worldviewId, PostStatus.PENDING)
-            .map { post -> PostResponse.from(post) }
+            .map { post -> val tags = getTagsForPost(post.id!!)
+                PostResponse.from(post, tags) }
+    }
+    @Transactional(readOnly = true)
+    fun findPostsByTag(worldviewId: Long, tagName: String): List<PostResponse> { // ✅ worldviewId 파라미터 추가
+        val tag = tagRepository.findByName(tagName) ?: return emptyList()
+
+        // ✅ 새로 만든 쿼리 메서드를 호출하여 worldviewId와 tag로 동시에 검색
+        val posts = postRepository.findByWorldviewIdAndTag(worldviewId, tag)
+
+        return posts.map { post ->
+            val tags = getTagsForPost(post.id!!)
+            PostResponse.from(post, tags)
+        }
     }
 }

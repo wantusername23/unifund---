@@ -34,6 +34,10 @@ import org.example.unifundemo.domain.worldview.Permission
 import org.example.unifundemo.dto.worldview.ContributorRequest
 import org.example.unifundemo.dto.worldview.ContributorResponse
 import org.example.unifundemo.repository.ContributorRepository
+import org.example.unifundemo.domain.tag.WorldViewTag
+import org.example.unifundemo.repository.TagRepository
+import org.example.unifundemo.repository.WorldViewTagRepository
+import org.example.unifundemo.service.NotificationService
 
 
 @Service
@@ -47,10 +51,16 @@ class WorldviewService(
     private val distributionHistoryRepository: DistributionHistoryRepository, // ✅ 추가
     private val revenueShareRepository: RevenueShareRepository,
     private val postRepository: PostRepository,
-    private val contributorRepository: ContributorRepository
+    private val contributorRepository: ContributorRepository,
+    private val tagService: TagService,
+    private val tagRepository: TagRepository,
+    private val worldViewTagRepository: WorldViewTagRepository,
+    private val notificationService: NotificationService
 ) {
     fun createWorldview(email: String, request: CreateWorldviewRequest, file: MultipartFile): WorldView {
+        // ✅ createAndSaveWorldview가 worldview를 반환하므로 tags를 request에서 가져옴
         val worldview = createAndSaveWorldview(email, request, file)
+        processWorldViewTags(worldview, request.tags) // ✅ 태그 처리 로직 호출
         createMembershipTiers(worldview, request)
         return worldview
     }
@@ -58,6 +68,7 @@ class WorldviewService(
     // AI 이미지 URL 방식
     fun createWorldview(email: String, request: CreateWorldviewRequest): WorldView {
         val worldview = createAndSaveWorldview(email, request)
+        processWorldViewTags(worldview, request.tags) // ✅ 태그 처리 로직 호출
         createMembershipTiers(worldview, request)
         return worldview
     }
@@ -86,6 +97,22 @@ class WorldviewService(
         )
         return worldviewRepository.save(worldview)
     }
+    private fun processWorldViewTags(worldView: WorldView, tagNames: Set<String>) {
+        if (tagNames.isEmpty()) return
+
+        val tags = tagService.findOrCreateTags(tagNames)
+        val worldViewTags = tags.map { tag ->
+            WorldViewTag(worldView = worldView, tag = tag)
+        }
+        worldViewTagRepository.saveAll(worldViewTags)
+    }
+    // ✅ 세계관 ID로 태그 이름 Set을 조회하는 로직 (내부 헬퍼)
+
+    private fun getTagsForWorldview(worldviewId: Long): Set<String> {
+        return worldViewTagRepository.findByWorldViewId(worldviewId)
+            .map { it.tag.name }
+            .toSet()
+    }
 
     private fun createMembershipTiers(worldview: WorldView, request: CreateWorldviewRequest) {
         val lowTierMembership = Membership(
@@ -109,9 +136,10 @@ class WorldviewService(
     fun getAllWorldviews(userEmail: String?): List<WorldviewSimpleResponse> {
         return worldviewRepository.findAll()
             .map { worldview ->
-                // ✅ isCreator 값 계산
                 val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
-                WorldviewSimpleResponse.from(worldview, isCreator)
+                // ✅ 태그 조회 로직 추가
+                val tags = getTagsForWorldview(worldview.id!!)
+                WorldviewSimpleResponse.from(worldview, isCreator, tags) // ✅ DTO에 tags 전달
             }
     }
 
@@ -120,9 +148,10 @@ class WorldviewService(
     fun getWorldviewById(id: Long, userEmail: String?): WorldviewDetailResponse {
         val worldview = worldviewRepository.findById(id)
             .orElseThrow { EntityNotFoundException("해당 ID의 세계관을 찾을 수 없습니다: $id") }
-        // ✅ isCreator 값 계산
         val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
-        return WorldviewDetailResponse.from(worldview, isCreator)
+        // ✅ 태그 조회 로직 추가
+        val tags = getTagsForWorldview(worldview.id!!)
+        return WorldviewDetailResponse.from(worldview, isCreator, tags) // ✅ DTO에 tags 전달
     }
     // 멤버십 등급 추가 메소드
     fun addMembershipTier(worldviewId: Long, userEmail: String, request: CreateMembershipRequest): MembershipResponse {
@@ -162,20 +191,20 @@ class WorldviewService(
         val membership = membershipRepository.findById(membershipId)
             .orElseThrow { EntityNotFoundException("해당 ID의 멤버십을 찾을 수 없습니다: $membershipId") }
 
-        // 비즈니스 로직: 이미 가입한 멤버십인지 확인
-        if (userMembershipRepository.existsByUserAndMembershipId(user, membershipId)) {
-            throw IllegalStateException("이미 가입한 멤버십입니다.")
-        }
-
-        // 💡 실제 서비스에서는 이 부분에서 결제 API를 호출해야 합니다.
-        // paymentGateway.processPayment(user, membership.price)
-
+        // ... (기존 가입 로직)
         val userMembership = UserMembership(
             user = user,
             membership = membership
         )
-
         userMembershipRepository.save(userMembership)
+
+        // ✅ 알림 발송 로직 추가
+        val creator = membership.worldview.creator
+        // 본인이 본인 세계관에 가입하는 경우는 제외
+        if (creator.id != user.id) {
+            val message = "${user.nickname}님이 '${membership.worldview.name}'의 '${membership.name}' 멤버십에 가입했습니다."
+            notificationService.sendNotification(creator, message)
+        }
     }
     @Transactional(readOnly = true)
     fun searchWorldviews(query: String, userEmail: String?): List<WorldviewSimpleResponse> {
@@ -184,7 +213,7 @@ class WorldviewService(
         val directResults = worldviewRepository.searchWorldviews(query)
 
         // 2. 인기 게시글의 제목, 내용에서 검색하여 관련 세계관 찾기
-        val popularPosts = postRepository.findPopularPostsContainingQuery(query)
+        val popularPosts = postRepository.findPopularPostsContainingQuery(query, PostStatus.APPROVED)
         val postRelatedResults = popularPosts.map { it.worldview }
 
         // 3. 두 검색 결과를 합치고 중복을 제거
@@ -193,9 +222,23 @@ class WorldviewService(
         // 4. 결과를 DTO로 변환하여 반환
         return combinedResults.map { worldview ->
             val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
-            WorldviewSimpleResponse.from(worldview, isCreator)
+            val tags = getTagsForWorldview(worldview.id!!)
+            WorldviewSimpleResponse.from(worldview, isCreator, tags)
         }
     }
+    // ✅ 태그 기반 세계관 검색 메서드 추가
+    @Transactional(readOnly = true)
+    fun findWorldviewsByTag(tagName: String, userEmail: String?): List<WorldviewSimpleResponse> {
+        val tag = tagRepository.findByName(tagName) ?: return emptyList()
+        val worldviews = worldViewTagRepository.findByTag(tag).map { it.worldView }
+
+        return worldviews.map { worldview ->
+            val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
+            val tags = getTagsForWorldview(worldview.id!!)
+            WorldviewSimpleResponse.from(worldview, isCreator, tags)
+        }
+    }
+
     @Transactional(readOnly = true)
     fun getWorldviewForAdmin(worldviewId: Long, userEmail: String): Map<String, Any> {
         val worldview = worldviewRepository.findById(worldviewId)

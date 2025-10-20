@@ -21,5 +21,7 @@ data class CreateWorldviewRequest(
     val lowTier: MembershipTierRequest,
 
     @field:Valid
-    val highTier: MembershipTierRequest
+    val highTier: MembershipTierRequest,
+
+    val tags: Set<String> = emptySet()
 )

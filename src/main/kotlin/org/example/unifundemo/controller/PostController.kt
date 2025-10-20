@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.security.Principal
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.RequestParam
 
 @RestController
 @RequestMapping("/api/worldviews/{worldviewId}/posts") // API 주소를 세계관 하위 경로로 설정
@@ -78,6 +79,16 @@ class PostController(
         principal: Principal
     ): ResponseEntity<List<PostResponse>> {
         val posts = postService.getPendingPosts(worldviewId, principal.name)
+        return ResponseEntity.ok(posts)
+    }
+    @GetMapping("/search/by-tag")
+    fun searchPostsByTag(
+        @PathVariable worldviewId: Long, // ✅ 이 값을 이제 사용합니다.
+        @RequestParam tag: String
+    ): ResponseEntity<List<PostResponse>> {
+
+        // ✅ worldviewId를 서비스 메서드로 전달합니다.
+        val posts = postService.findPostsByTag(worldviewId, tag)
         return ResponseEntity.ok(posts)
     }
 }

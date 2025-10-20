@@ -15,6 +15,7 @@ import org.springframework.http.MediaType
 import org.springframework.web.multipart.MultipartFile
 import org.example.unifundemo.dto.worldview.ContributorRequest
 import org.example.unifundemo.dto.worldview.ContributorResponse
+import org.springframework.web.bind.annotation.RequestParam
 
 @RestController
 @RequestMapping("/api/worldviews")
@@ -103,5 +104,10 @@ class WorldviewController(
     fun getContributors(@PathVariable worldviewId: Long): ResponseEntity<List<ContributorResponse>> {
         val contributors = worldviewService.getContributors(worldviewId)
         return ResponseEntity.ok(contributors)
+    }
+    @GetMapping("/search/by-tag")
+    fun searchWorldviewsByTag(@RequestParam tag: String, principal: Principal?): ResponseEntity<List<WorldviewSimpleResponse>> {
+        val worldviews = worldviewService.findWorldviewsByTag(tag, principal?.name)
+        return ResponseEntity.ok(worldviews)
     }
 }
