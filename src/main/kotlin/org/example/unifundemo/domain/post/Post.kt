@@ -41,7 +41,8 @@ class Post(
 
     var recommendations: Int = 0,
     // 추천수, 인기 게시판을 위해 미리 추가
-    var viewCount: Int = 0
+    var viewCount: Int = 0,
+    var isNotice: Boolean = false
 
     // 작품 게시판을 위해 상태 추가, 기본값은 PENDING
 )

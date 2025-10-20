@@ -19,5 +19,7 @@ class User(
     @Column(unique = true, nullable = false)
     var nickname: String,
 
-    var balance: BigDecimal = BigDecimal.ZERO
+    var balance: BigDecimal = BigDecimal.ZERO,
+
+    var showBalance: Boolean = true
 )

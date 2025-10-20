@@ -9,4 +9,5 @@ interface UserMembershipRepository : JpaRepository<UserMembership, Long> {
     // 유저가 특정 멤버십에 이미 가입했는지 확인하는 기능
     fun existsByUserAndMembershipId(user: User, membershipId: Long): Boolean
     fun existsByUserAndMembershipWorldview(user: User, worldview: WorldView): Boolean
+    fun findByUserAndMembershipWorldview(user: User, worldview: WorldView): UserMembership?
 }

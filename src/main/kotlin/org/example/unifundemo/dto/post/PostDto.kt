@@ -7,7 +7,8 @@ import java.time.LocalDateTime
 
 data class CreatePostRequest(
     val title: String,
-    val content: String
+    val content: String,
+    val isNotice: Boolean? = false
 )
 
 data class PostResponse(
@@ -16,7 +17,8 @@ data class PostResponse(
     val content: String,
     val authorNickname: String,
     val createdAt: LocalDateTime,
-    val recommendations: Int
+    val recommendations: Int,
+    val isNotice: Boolean
 ) {
     companion object {
         fun from(post: Post): PostResponse {
@@ -26,7 +28,8 @@ data class PostResponse(
                 content = post.content,
                 authorNickname = post.author.nickname,
                 createdAt = post.createdAt,
-                recommendations = post.recommendations
+                recommendations = post.recommendations,
+                isNotice = post.isNotice
             )
         }
     }

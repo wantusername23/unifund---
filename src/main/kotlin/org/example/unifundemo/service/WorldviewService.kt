@@ -16,6 +16,20 @@ import org.example.unifundemo.repository.MembershipRepository
 import org.springframework.security.access.AccessDeniedException
 import org.example.unifundemo.domain.membership.UserMembership
 import org.example.unifundemo.repository.UserMembershipRepository
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.web.multipart.MultipartFile
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.UUID
+import org.example.unifundemo.domain.accounting.DistributionHistory
+import org.example.unifundemo.domain.accounting.RevenueShare
+import org.example.unifundemo.repository.DistributionHistoryRepository
+import org.example.unifundemo.repository.RevenueShareRepository
+import java.math.BigDecimal
+import java.math.RoundingMode
+import org.example.unifundemo.repository.PostRepository
+import org.example.unifundemo.domain.post.PostStatus
+
 
 @Service
 @Transactional
@@ -23,37 +37,86 @@ class WorldviewService(
     private val worldviewRepository: WorldViewRepository,
     private val userRepository: UserRepository,
     private val membershipRepository: MembershipRepository,
-    private val userMembershipRepository: UserMembershipRepository
+    private val userMembershipRepository: UserMembershipRepository,
+    @Value("\${file.upload-dir}") private val uploadDir: String,
+    private val distributionHistoryRepository: DistributionHistoryRepository, // ✅ 추가
+    private val revenueShareRepository: RevenueShareRepository,
+    private val postRepository: PostRepository
 ) {
+    fun createWorldview(email: String, request: CreateWorldviewRequest, file: MultipartFile): WorldView {
+        val worldview = createAndSaveWorldview(email, request, file)
+        createMembershipTiers(worldview, request)
+        return worldview
+    }
+
+    // AI 이미지 URL 방식
     fun createWorldview(email: String, request: CreateWorldviewRequest): WorldView {
-        // 1. 이메일을 사용해서 창조자(User) 정보를 찾습니다.
+        val worldview = createAndSaveWorldview(email, request)
+        createMembershipTiers(worldview, request)
+        return worldview
+    }
+
+    // 중복 로직을 분리한 내부 메소드들
+    private fun createAndSaveWorldview(email: String, request: CreateWorldviewRequest, file: MultipartFile? = null): WorldView {
         val creator = userRepository.findByEmail(email) ?: throw IllegalArgumentException("사용자를 찾을 수 없습니다.")
 
-        // 2. DTO와 창조자 정보를 바탕으로 Worldview 객체를 만듭니다.
+        val imageUrl = if (file != null) {
+            val filename = "${java.util.UUID.randomUUID()}-${file.originalFilename}"
+            val filePath = java.nio.file.Paths.get(uploadDir, filename)
+            java.nio.file.Files.createDirectories(filePath.parent)
+            java.nio.file.Files.copy(file.inputStream, filePath)
+            "/images/$filename"
+        } else {
+            require(!request.coverImageUrl.isNullOrBlank()) { "이미지 파일 또는 URL이 필요합니다." }
+            request.coverImageUrl
+        }
+
         val worldview = WorldView(
             name = request.name,
             description = request.description,
             keywords = request.keywords,
-            coverImageUrl = request.coverImageUrl,
+            coverImageUrl = imageUrl,
             creator = creator
         )
-
-        // 3. 데이터베이스에 저장하고 반환합니다.
         return worldviewRepository.save(worldview)
+    }
+
+    private fun createMembershipTiers(worldview: WorldView, request: CreateWorldviewRequest) {
+        val lowTierMembership = Membership(
+            name = request.lowTier.name,
+            price = request.lowTier.price,
+            description = request.lowTier.description,
+            level = 1, // 낮은 단계는 레벨 1
+            worldview = worldview
+        )
+        val highTierMembership = Membership(
+            name = request.highTier.name,
+            price = request.highTier.price,
+            description = request.highTier.description,
+            level = 2, // 높은 단계는 레벨 2
+            worldview = worldview
+        )
+        membershipRepository.saveAll(listOf(lowTierMembership, highTierMembership))
     }
     // 전체 세계관 목록 조회 메소드 추가
     @Transactional(readOnly = true) // 읽기 전용 트랜잭션은 성능에 이점이 있음
-    fun getAllWorldviews(): List<WorldviewSimpleResponse> {
+    fun getAllWorldviews(userEmail: String?): List<WorldviewSimpleResponse> {
         return worldviewRepository.findAll()
-            .map { worldview -> WorldviewSimpleResponse.from(worldview) }
+            .map { worldview ->
+                // ✅ isCreator 값 계산
+                val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
+                WorldviewSimpleResponse.from(worldview, isCreator)
+            }
     }
 
-    // 특정 세계관 상세 조회 메소드 추가
+    // ✅ 메소드 시그니처 변경 (userEmail: String?)
     @Transactional(readOnly = true)
-    fun getWorldviewById(id: Long): WorldviewDetailResponse {
+    fun getWorldviewById(id: Long, userEmail: String?): WorldviewDetailResponse {
         val worldview = worldviewRepository.findById(id)
             .orElseThrow { EntityNotFoundException("해당 ID의 세계관을 찾을 수 없습니다: $id") }
-        return WorldviewDetailResponse.from(worldview)
+        // ✅ isCreator 값 계산
+        val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
+        return WorldviewDetailResponse.from(worldview, isCreator)
     }
     // 멤버십 등급 추가 메소드
     fun addMembershipTier(worldviewId: Long, userEmail: String, request: CreateMembershipRequest): MembershipResponse {
@@ -109,8 +172,109 @@ class WorldviewService(
         userMembershipRepository.save(userMembership)
     }
     @Transactional(readOnly = true)
-    fun searchWorldviews(query: String): List<WorldviewSimpleResponse> {
-        return worldviewRepository.findByNameContainingIgnoreCaseOrKeywordsContainingIgnoreCase(query, query)
-            .map { worldview -> WorldviewSimpleResponse.from(worldview) }
+    fun searchWorldviews(query: String, userEmail: String?): List<WorldviewSimpleResponse> {
+        // 1. 세계관의 제목, 키워드, 설명에서 직접 검색
+        val directResults = worldviewRepository.findByNameContainingIgnoreCaseOrKeywordsContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query, query)
+
+        // 2. 인기 게시글의 제목, 내용에서 검색하여 관련 세계관 찾기
+        val popularPosts = postRepository.findPopularPostsContainingQuery(query)
+        val postRelatedResults = popularPosts.map { it.worldview }
+
+        // 3. 두 검색 결과를 합치고 중복을 제거
+        val combinedResults = (directResults + postRelatedResults).distinctBy { it.id }
+
+        // 4. 결과를 DTO로 변환하여 반환
+        return combinedResults.map { worldview ->
+            val isCreator = userEmail?.let { it == worldview.creator.email } ?: false
+            WorldviewSimpleResponse.from(worldview, isCreator)
+        }
+    }
+    @Transactional(readOnly = true)
+    fun getWorldviewForAdmin(worldviewId: Long, userEmail: String): Map<String, Any> {
+        val worldview = worldviewRepository.findById(worldviewId)
+            .orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
+
+        // 🛡️ 권한 검사
+        if (worldview.creator.email != userEmail) {
+            throw AccessDeniedException("세계관 관리 정보에 접근할 권한이 없습니다.")
+        }
+
+        return mapOf(
+            "id" to worldview.id!!,
+            "name" to worldview.name,
+            "revenuePool" to worldview.revenuePool
+        )
+    }
+
+    // ✅ distributeRevenue 메소드를 아래 코드로 전체 교체
+    fun distributeRevenue(worldviewId: Long, userEmail: String) {
+        val worldview = worldviewRepository.findById(worldviewId)
+            .orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
+
+        if (worldview.creator.email != userEmail) {
+            throw AccessDeniedException("수익을 분배할 권한이 없습니다.")
+        }
+
+        val totalRevenue = worldview.revenuePool
+        if (totalRevenue <= BigDecimal.ZERO) {
+            throw IllegalStateException("분배할 수익이 없습니다.")
+        }
+
+        // 1. 분배 기록 생성
+        val history = distributionHistoryRepository.save(DistributionHistory(worldview = worldview, totalAmount = totalRevenue))
+
+        // 2. 각 그룹별 수익 계산
+        val creatorShare = totalRevenue.multiply(BigDecimal("0.3"))
+        val popularAuthorsShare = totalRevenue.multiply(BigDecimal("0.4"))
+        val membersShare = totalRevenue.multiply(BigDecimal("0.3"))
+
+        // 3. 창작자에게 수익 분배
+        val creator = worldview.creator
+        creator.balance = creator.balance.add(creatorShare)
+        userRepository.save(creator)
+        revenueShareRepository.save(RevenueShare(history = history, user = creator, amount = creatorShare, description = "창작자 수익"))
+
+        // 4. 인기 글 작성자들에게 분배
+        val popularPosts = postRepository.findByRecommendationsGreaterThanEqualAndStatusOrderByCreatedAtDesc(20, PostStatus.APPROVED)
+            .filter { it.worldview.id == worldviewId }
+
+        if (popularPosts.isNotEmpty()) {
+            val totalRecommendations = popularPosts.sumOf { it.recommendations }.toBigDecimal()
+            popularPosts.forEach { post ->
+                val author = post.author
+                val contribution = post.recommendations.toBigDecimal().divide(totalRecommendations, 10, RoundingMode.HALF_UP)
+                val authorReward = popularAuthorsShare.multiply(contribution)
+
+                author.balance = author.balance.add(authorReward)
+                userRepository.save(author)
+                revenueShareRepository.save(RevenueShare(history = history, user = author, amount = authorReward, description = "인기글 보상: ${post.title}"))
+            }
+        }
+
+        // 5. 모든 멤버에게 균등 분배
+        val members = userMembershipRepository.findAll().filter { it.membership.worldview.id == worldviewId }.map { it.user }.distinct()
+        if (members.isNotEmpty()) {
+            val individualMemberShare = membersShare.divide(members.size.toBigDecimal(), 10, RoundingMode.HALF_UP)
+            members.forEach { member ->
+                member.balance = member.balance.add(individualMemberShare)
+                userRepository.save(member)
+                revenueShareRepository.save(RevenueShare(history = history, user = member, amount = individualMemberShare, description = "멤버십 참여 수익"))
+            }
+        }
+
+        // 6. 세계관 수익 풀 초기화
+        worldview.revenuePool = BigDecimal.ZERO
+        worldviewRepository.save(worldview)
+    }
+
+    // ✅ 관리자 페이지에서 분배 내역을 보기 위한 메소드 추가
+    @Transactional(readOnly = true)
+    fun getDistributionHistory(worldviewId: Long, userEmail: String): List<DistributionHistory> {
+        val worldview = worldviewRepository.findById(worldviewId)
+            .orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
+        if (worldview.creator.email != userEmail) {
+            throw AccessDeniedException("분배 내역을 조회할 권한이 없습니다.")
+        }
+        return distributionHistoryRepository.findByWorldviewIdOrderByIdDesc(worldviewId)
     }
 }

@@ -29,9 +29,11 @@ class PostService(
         val user = userRepository.findByEmail(userEmail) ?: throw EntityNotFoundException("사용자를 찾을 수 없습니다.")
         val worldview = worldviewRepository.findById(worldviewId).orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
 
-        // 🛡️ 권한 검사: 이 세계관의 멤버십에 가입한 사용자인지 확인
-        val isMember = userMembershipRepository.existsByUserAndMembershipWorldview(user, worldview)
-        if (!isMember) {
+        // 🛡️ 권한 검사: 레벨 1 이상 멤버십 가입자인지 확인
+        val subscription = userMembershipRepository.findByUserAndMembershipWorldview(user, worldview)
+            ?: throw AccessDeniedException("멤버십 가입자만 글을 작성할 수 있습니다.")
+
+        if (subscription.membership.level < 1) { // 사실상 모든 멤버십 허용
             throw AccessDeniedException("이 게시판에 글을 작성할 권한이 없습니다.")
         }
 
@@ -52,10 +54,15 @@ class PostService(
         val user = userRepository.findByEmail(userEmail) ?: throw EntityNotFoundException("사용자를 찾을 수 없습니다.")
         val worldview = worldviewRepository.findById(worldviewId).orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
 
-        // 🛡️ 권한 검사: 이 세계관의 멤버십에 가입한 사용자인지 확인
-        val isMember = userMembershipRepository.existsByUserAndMembershipWorldview(user, worldview)
-        if (!isMember) {
-            throw AccessDeniedException("이 게시판에 글을 작성할 권한이 없습니다.")
+        // 🛡️ 권한 검사: 레벨 2 이상 멤버십 가입자인지 확인
+        val subscription = userMembershipRepository.findByUserAndMembershipWorldview(user, worldview)
+            ?: throw AccessDeniedException("작품 게시판은 특정 등급 이상의 멤버십 가입자만 작성할 수 있습니다.")
+
+        if (subscription.membership.level < 2) {
+            throw AccessDeniedException("작품 게시판에 글을 작성할 수 있는 멤버십 등급이 아닙니다.")
+        }
+        if (request.isNotice == true && worldview.creator.email != userEmail) {
+            throw AccessDeniedException("공지는 세계관 창작자만 작성할 수 있습니다.")
         }
 
         val post = Post(
@@ -88,7 +95,8 @@ class PostService(
     // 게시판 글 목록 조회
     @Transactional(readOnly = true)
     fun getPosts(worldviewId: Long, boardType: BoardType): List<PostResponse> {
-        return postRepository.findByWorldviewIdAndBoardType(worldviewId, boardType)
+        // ✅ 수정된 메소드 호출
+        return postRepository.findByWorldviewIdAndBoardTypeOrderByIsNoticeDescCreatedAtDesc(worldviewId, boardType)
             .map { post -> PostResponse.from(post) }
     }
     fun recommendPost(postId: Long, userEmail: String) {
@@ -132,5 +140,18 @@ class PostService(
         post.worldview.revenuePool = post.worldview.revenuePool.add(revenuePerView)
 
         return PostResponse.from(postRepository.save(post))
+    }
+    @Transactional(readOnly = true)
+    fun getPendingPosts(worldviewId: Long, userEmail: String): List<PostResponse> {
+        val worldview = worldviewRepository.findById(worldviewId)
+            .orElseThrow { EntityNotFoundException("세계관을 찾을 수 없습니다.") }
+
+        // 🛡️ 권한 검사: 요청자가 세계관의 창작자인지 확인
+        if (worldview.creator.email != userEmail) {
+            throw AccessDeniedException("승인 대기 목록을 조회할 권한이 없습니다.")
+        }
+
+        return postRepository.findByWorldviewIdAndStatus(worldviewId, PostStatus.PENDING)
+            .map { post -> PostResponse.from(post) }
     }
 }

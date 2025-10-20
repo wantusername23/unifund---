@@ -2,6 +2,8 @@ package org.example.unifundemo.domain.membership
 
 import org.example.unifundemo.domain.worldview.WorldView
 import jakarta.persistence.*
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.PositiveOrZero
 
 @Entity
 class Membership(

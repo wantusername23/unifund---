@@ -72,4 +72,12 @@ class PostController(
         val post = postService.getPostDetails(postId)
         return ResponseEntity.ok(post)
     }
+    @GetMapping("/pending")
+    fun getPendingPosts(
+        @PathVariable worldviewId: Long,
+        principal: Principal
+    ): ResponseEntity<List<PostResponse>> {
+        val posts = postService.getPendingPosts(worldviewId, principal.name)
+        return ResponseEntity.ok(posts)
+    }
 }

@@ -11,15 +11,30 @@ import org.example.unifundemo.dto.worldview.WorldviewSimpleResponse
 import org.example.unifundemo.dto.membership.CreateMembershipRequest
 import org.example.unifundemo.dto.membership.MembershipResponse
 import org.springframework.web.bind.annotation.*
+import org.springframework.http.MediaType
+import org.springframework.web.multipart.MultipartFile
 
 @RestController
 @RequestMapping("/api/worldviews")
 class WorldviewController(
     private val worldviewService: WorldviewService
 ) {
-    @PostMapping
-    fun createWorldview(
-        principal: Principal, // 💡 JWT 필터가 인증 정보를 넣어주면, 여기서 현재 로그인한 사용자의 이메일을 꺼낼 수 있습니다.
+    // ✅ 1. 파일 업로드용 엔드포인트 경로 지정
+    @PostMapping("/upload", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun createWorldviewWithUpload(
+        principal: Principal,
+        @RequestPart("request") @Valid request: CreateWorldviewRequest,
+        @RequestPart("file") file: MultipartFile
+    ): ResponseEntity<String> {
+        val userEmail = principal.name
+        worldviewService.createWorldview(userEmail, request, file)
+        return ResponseEntity.status(HttpStatus.CREATED).body("세계관이 성공적으로 생성되었습니다.")
+    }
+
+    // ✅ 2. AI 이미지 URL용 엔드포인트 추가
+    @PostMapping("/url")
+    fun createWorldviewWithUrl(
+        principal: Principal,
         @Valid @RequestBody request: CreateWorldviewRequest
     ): ResponseEntity<String> {
         val userEmail = principal.name
@@ -27,15 +42,19 @@ class WorldviewController(
         return ResponseEntity.status(HttpStatus.CREATED).body("세계관이 성공적으로 생성되었습니다.")
     }
     @GetMapping
-    fun getAllWorldviews(): ResponseEntity<List<WorldviewSimpleResponse>> {
-        val worldviews = worldviewService.getAllWorldviews()
+    fun getAllWorldviews(principal: Principal?): ResponseEntity<List<WorldviewSimpleResponse>> { // ✅ Principal? 추가
+        // ✅ principal?.name (로그인한 사용자의 이메일) 전달
+        val worldviews = worldviewService.getAllWorldviews(principal?.name)
         return ResponseEntity.ok(worldviews)
     }
 
-    // 특정 세계관 상세 조회 API 추가
     @GetMapping("/{id}")
-    fun getWorldviewById(@PathVariable id: Long): ResponseEntity<WorldviewDetailResponse> {
-        val worldview = worldviewService.getWorldviewById(id)
+    fun getWorldviewById(
+        @PathVariable id: Long,
+        principal: Principal? // ✅ Principal? 추가
+    ): ResponseEntity<WorldviewDetailResponse> {
+        // ✅ principal?.name 전달
+        val worldview = worldviewService.getWorldviewById(id, principal?.name)
         return ResponseEntity.ok(worldview)
     }
     @PostMapping("/{worldviewId}/memberships")
@@ -64,8 +83,8 @@ class WorldviewController(
         return ResponseEntity.ok("멤버십 가입이 완료되었습니다.")
     }
     @GetMapping("/search")
-    fun searchWorldviews(@RequestParam q: String): ResponseEntity<List<WorldviewSimpleResponse>> {
-        val worldviews = worldviewService.searchWorldviews(q)
+    fun searchWorldviews(@RequestParam q: String, principal: Principal?): ResponseEntity<List<WorldviewSimpleResponse>> {
+        val worldviews = worldviewService.searchWorldviews(q, principal?.name)
         return ResponseEntity.ok(worldviews)
     }
 }

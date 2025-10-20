@@ -1,7 +1,9 @@
 package org.example.unifundemo.dto.worldview
 
+import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import org.example.unifundemo.dto.membership.MembershipTierRequest
 
 data class CreateWorldviewRequest(
     @field:NotBlank(message = "세계관 이름은 비워둘 수 없습니다.")
@@ -13,5 +15,11 @@ data class CreateWorldviewRequest(
 
     val keywords: String,
 
-    val coverImageUrl: String
+    val coverImageUrl: String,
+
+    @field:Valid
+    val lowTier: MembershipTierRequest,
+
+    @field:Valid
+    val highTier: MembershipTierRequest
 )

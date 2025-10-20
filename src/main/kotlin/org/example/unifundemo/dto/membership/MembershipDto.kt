@@ -40,3 +40,12 @@ data class MembershipResponse(
         }
     }
 }
+data class MembershipTierRequest(
+    @field:NotBlank
+    val name: String,
+
+    @field:PositiveOrZero(message = "가격은 0 이상이어야 합니다.")
+    val price: Int,
+
+    val description: String
+)
