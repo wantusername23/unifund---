@@ -95,6 +95,7 @@ export const subscribeToMembership = (membershipId) => apiClient.post(`/api/worl
 // --- Tag ---
 // ✅ Added missing tag export
 export const getAllTags = () => apiClient.get('/api/tags');
-
+export const searchInWorldview = (worldviewId, query) =>
+    apiClient.get(`/api/worldviews/${worldviewId}/search`, { params: { q: query } });
 
 export default apiClient;

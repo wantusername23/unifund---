@@ -12,12 +12,12 @@ import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.RequestParam
 
 @RestController
-@RequestMapping("/api/worldviews/{worldviewId}/posts") // API 주소를 세계관 하위 경로로 설정
+@RequestMapping("/api/worldviews/{worldviewId}") // API 주소를 세계관 하위 경로로 설정
 class PostController(
     private val postService: PostService
 ) {
     // 자유게시판 글 작성 API
-    @PostMapping("/free")
+    @PostMapping("/posts/free")
     fun createFreeBoardPost(
         @PathVariable worldviewId: Long,
         principal: Principal,
@@ -28,7 +28,7 @@ class PostController(
     }
 
     // 게시판 글 목록 조회 API
-    @GetMapping
+    @GetMapping("/posts")
     fun getPosts(
         @PathVariable worldviewId: Long,
         @RequestParam boardType: BoardType
@@ -36,7 +36,7 @@ class PostController(
         val posts = postService.getPosts(worldviewId, boardType)
         return ResponseEntity.ok(posts)
     }
-    @PostMapping("/works")
+    @PostMapping("/posts/works")
     fun createWorksBoardPost(
         @PathVariable worldviewId: Long,
         principal: Principal,
@@ -47,7 +47,7 @@ class PostController(
     }
 
     // 게시글 승인 API
-    @PatchMapping("/{postId}/approve")
+    @PatchMapping("/posts/{postId}/approve")
     fun approvePost(
         @PathVariable worldviewId: Long, // URL 구조 일관성을 위해 포함
         @PathVariable postId: Long,
@@ -56,7 +56,7 @@ class PostController(
         val post = postService.approvePost(postId, principal.name)
         return ResponseEntity.ok(post)
     }
-    @PostMapping("/{postId}/recommend")
+    @PostMapping("/posts/{postId}/recommend")
     fun recommendPost(
         @PathVariable worldviewId: Long,
         @PathVariable postId: Long,
@@ -65,7 +65,7 @@ class PostController(
         postService.recommendPost(postId, principal.name)
         return ResponseEntity.ok("게시글을 추천했습니다.")
     }
-    @GetMapping("/{postId}")
+    @GetMapping("/posts/{postId}")
     fun getPostDetails(
         @PathVariable worldviewId: Long,
         @PathVariable postId: Long
@@ -73,7 +73,7 @@ class PostController(
         val post = postService.getPostDetails(postId)
         return ResponseEntity.ok(post)
     }
-    @GetMapping("/pending")
+    @GetMapping("/posts/pending")
     fun getPendingPosts(
         @PathVariable worldviewId: Long,
         principal: Principal
@@ -81,7 +81,7 @@ class PostController(
         val posts = postService.getPendingPosts(worldviewId, principal.name)
         return ResponseEntity.ok(posts)
     }
-    @GetMapping("/search/by-tag")
+    @GetMapping("/posts/search/by-tag")
     fun searchPostsByTag(
         @PathVariable worldviewId: Long, // ✅ 이 값을 이제 사용합니다.
         @RequestParam tag: String
@@ -90,5 +90,13 @@ class PostController(
         // ✅ worldviewId를 서비스 메서드로 전달합니다.
         val posts = postService.findPostsByTag(worldviewId, tag)
         return ResponseEntity.ok(posts)
+    }
+    @GetMapping("/search")
+    fun searchInWorldview(
+        @PathVariable worldviewId: Long,
+        @RequestParam q: String // 검색어 파라미터
+    ): ResponseEntity<List<PostResponse>> {
+        val results = postService.searchPostsAndCommentsInWorldview(worldviewId, q)
+        return ResponseEntity.ok(results)
     }
 }

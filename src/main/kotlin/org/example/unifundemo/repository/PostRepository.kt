@@ -31,4 +31,9 @@ interface PostRepository : JpaRepository<Post, Long> {
         @Param("worldviewId") worldviewId: Long,
         @Param("tag") tag: Tag
     ): List<Post>
+    @Query("SELECT p FROM Post p WHERE p.worldview.id = :worldviewId AND p.status = 'APPROVED' AND (LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) OR p.content LIKE CONCAT('%', :query, '%'))")
+    fun searchApprovedPostsInWorldview(
+        @Param("worldviewId") worldviewId: Long,
+        @Param("query") query: String
+    ): List<Post>
 }

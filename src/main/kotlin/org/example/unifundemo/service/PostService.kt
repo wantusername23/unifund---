@@ -33,7 +33,8 @@ class PostService(
     private val tagService: TagService,
     private val tagRepository: TagRepository,
     private val postTagRepository: PostTagRepository,
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    private val commentRepository: CommentRepository
 ) {
     // ✅ 게시글 태그 처리 로직 (내부 헬퍼)
     private fun processPostTags(post: Post, tagNames: Set<String>) {
@@ -209,6 +210,26 @@ class PostService(
         val posts = postRepository.findByWorldviewIdAndTag(worldviewId, tag)
 
         return posts.map { post ->
+            val tags = getTagsForPost(post.id!!)
+            PostResponse.from(post, tags)
+        }
+    }
+
+    // ✅ 세계관 내 검색 서비스 메서드 추가
+    @Transactional(readOnly = true)
+    fun searchPostsAndCommentsInWorldview(worldviewId: Long, query: String): List<PostResponse> {
+        // 1. 게시글 제목/내용에서 직접 검색
+        val postsFoundDirectly = postRepository.searchApprovedPostsInWorldview(worldviewId, query)
+
+        // 2. 댓글 내용에서 검색 후 관련 게시글 찾기
+        val commentsFound = commentRepository.searchCommentsInWorldview(worldviewId, query)
+        val postsFromComments = commentsFound.map { it.post }
+
+        // 3. 두 결과 합치고 중복 제거 (ID 기준)
+        val combinedResults = (postsFoundDirectly + postsFromComments).distinctBy { it.id }
+
+        // 4. DTO로 변환하여 반환
+        return combinedResults.map { post ->
             val tags = getTagsForPost(post.id!!)
             PostResponse.from(post, tags)
         }
