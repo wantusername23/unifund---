@@ -15,7 +15,7 @@ data class CreateWorldviewRequest(
 
     val keywords: String,
 
-    val coverImageUrl: String,
+    val coverImageUrl: String?,
 
     @field:Valid
     val lowTier: MembershipTierRequest,

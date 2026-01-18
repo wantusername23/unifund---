@@ -21,9 +21,8 @@ export const updateProfile = (profileData) => apiClient.put('/api/profile', prof
 // --- Worldview ---
 export const getWorldviews = () => apiClient.get('/api/worldviews');
 export const getWorldview = (id) => apiClient.get(`/api/worldviews/${id}`);
-export const createWorldviewWithUpload = (formData) => apiClient.post('/api/worldviews/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-});
+// CORRECTED: Removed the manual Content-Type header. The browser will set it automatically with the correct boundary.
+export const createWorldviewWithUpload = (formData) => apiClient.post('/api/worldviews/upload', formData);
 export const createWorldviewWithUrl = (data) => apiClient.post('/api/worldviews/url', data);
 export const searchWorldviews = (query) => apiClient.get('/api/worldviews/search', { params: { q: query } });
 export const searchWorldviewsByTag = (tag) => apiClient.get('/api/worldviews/search/by-tag', { params: { tag } });

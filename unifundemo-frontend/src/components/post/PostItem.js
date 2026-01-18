@@ -6,6 +6,14 @@ const PostItem = ({ post, worldviewId }) => (
     <div className="p-4 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors duration-200">
         {/* Link to the full post detail page */}
         <Link to={`/worldviews/${worldviewId}/posts/${post.id}`} className="block">
+            {/* Conditionally render the image if imageUrl exists */}
+            {post.imageUrl && (
+                <img
+                    src={post.imageUrl}
+                    alt={post.title}
+                    className="w-full h-32 object-cover rounded-md mb-4" // Style for the image
+                />
+            )}
             {/* Post Title: Large, bold, blue, truncates if too long */}
             <h4 className="text-lg font-semibold text-blue-600 hover:underline truncate">
                 {post.title}

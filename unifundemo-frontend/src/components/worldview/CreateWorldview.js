@@ -30,14 +30,14 @@ const CreateWorldview = () => {
         return () => URL.revokeObjectURL(objectUrl);
     }, [file]);
 
-    // Generate AI Preview URL (Placeholder)
+    // Generate AI Preview URL using a different image service
     const generateAiPreview = () => {
         if (!keywords.trim() && !name.trim()) {
             alert('Please enter keywords or a name first to generate an AI preview.');
             return;
         }
-        const query = keywords.split(',')[0]?.trim() || name;
-        const placeholderUrl = `https://via.placeholder.com/600x300.png?text=AI+Preview+for+${encodeURIComponent(query)}`;
+        // Using picsum.photos for a random image as a placeholder
+        const placeholderUrl = `https://picsum.photos/600/300?random=${Date.now()}`;
         console.log("Setting AI Preview URL:", placeholderUrl); // For debugging
         setAiPreviewUrl(placeholderUrl);
     };
@@ -54,11 +54,14 @@ const CreateWorldview = () => {
         setIsLoading(true);
         setError('');
 
+        // RESTORED: Convert keywords to a trimmed array of tags. This is a more robust approach.
+        const tags = keywords.split(',').map(tag => tag.trim()).filter(Boolean);
+
         const worldviewRequestBase = {
             name, description, keywords,
             lowTier: { name: lowTierName, price: lowTierPrice, description: 'Standard benefits' },
             highTier: { name: highTierName, price: highTierPrice, description: 'Enhanced benefits' },
-            tags: keywords.split(',').map(tag => tag.trim()).filter(Boolean)
+            tags // Use the processed tags array
         };
 
         try {
@@ -67,18 +70,20 @@ const CreateWorldview = () => {
                     setError('Please select an image file to upload.'); setIsLoading(false); return;
                 }
                 const formData = new FormData();
-                formData.append("request", new Blob([JSON.stringify({ ...worldviewRequestBase, coverImageUrl: '' })], { type: "application/json" }));
+                // RESTORED: Include coverImageUrl: '' as it might be expected by the backend.
+                const requestBlob = new Blob([JSON.stringify({ ...worldviewRequestBase, coverImageUrl: '' })], { type: "application/json" });
+                formData.append("request", requestBlob);
                 formData.append("file", file);
                 await createWorldviewWithUpload(formData);
             } else { // AI generation option
-                const finalAiImageUrl = aiPreviewUrl || `https://via.placeholder.com/600x300.png?text=AI+Image+for+${encodeURIComponent(keywords.split(',')[0] || name)}`;
+                const finalAiImageUrl = aiPreviewUrl || `https://picsum.photos/600/300?random=${Date.now()}`;
                 console.log("Submitting with AI Image URL:", finalAiImageUrl);
                 const requestData = { ...worldviewRequestBase, coverImageUrl: finalAiImageUrl };
                 await createWorldviewWithUrl(requestData);
             }
             navigate('/');
         } catch (error) {
-            console.error('Failed to create worldview', error);
+            console.error('Failed to create worldview', error.response ? error.response.data : error);
             setError('Failed to create worldview. Please check your input and try again.');
         } finally {
             setIsLoading(false);
@@ -125,7 +130,6 @@ const CreateWorldview = () => {
                         <div className="mt-4 space-y-4">
                             <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
                             {preview && (
-                                // ✅ Corrected this div - removed extra '>'
                                 <div>
                                     <p className="text-sm font-medium text-gray-600 mb-2">Upload Preview:</p>
                                     <img src={preview} alt="Upload Preview" className="rounded-md shadow-sm max-h-48 w-auto border"/>
